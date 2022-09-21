@@ -1,0 +1,19 @@
+{
+  "name": "flow-line-renderer",
+  "version": "1.0.0",
+  "description": "A external renderer for ArcGIS JS API, used to show the flow effect of lines.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/travelclover/flow-line-renderer.git"
+  },
+  "author": "travelclover",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/travelclover/flow-line-renderer/issues"
+  },
+  "homepage": "https://github.com/travelclover/flow-line-renderer#readme"
+}
