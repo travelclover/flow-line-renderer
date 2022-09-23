@@ -12,10 +12,15 @@ function resolve(dir) {
 
 module.exports = {
   entry: './src/index.ts',
+  mode: 'production',
   output: {
     clean: true,
     path: resolve('dist'),
     filename: 'index.min.js',
+    library: {
+      name: 'FlowLineRenderer',
+      type: 'umd',
+    },
   },
   module: {
     rules: [
