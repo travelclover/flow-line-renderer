@@ -14,17 +14,19 @@
   "author": "travelclover",
   "license": "MIT",
   "files": [
-    "dist"
+    "/dist",
+    "index.d.ts"
   ],
+  "types": "index.d.ts",
   "bugs": {
     "url": "https://github.com/travelclover/flow-line-renderer/issues"
   },
   "homepage": "https://github.com/travelclover/flow-line-renderer#readme",
   "dependencies": {
-    "@arcgis/core": "^4.24.7",
     "gl-matrix": "^3.4.3"
   },
   "devDependencies": {
+    "@types/arcgis-js-api": "^4.24.0",
     "cross-env": "^7.0.3",
     "ts-loader": "^9.4.1",
     "typescript": "^4.8.3",

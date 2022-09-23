@@ -4,8 +4,8 @@
  * @Date: 2022-09-21 16:00:25
  */
 import * as glMatrix from 'gl-matrix';
-import * as externalRenderers from '@arcgis/core/views/3d/externalRenderers';
 import { hexToRgb } from './utils';
+import type { Config } from '../index';
 
 const shaderStr = {
   // 片段着色器
@@ -41,6 +41,7 @@ class FlowLineRenderer {
   private speedArr: number[] = [];
   private defaultDensity = 3; // 点密度, 在地图层级放大的情况下，可能需要曾大该值
   private linesActiveIndex: number[] = []; // 每条线运动的索引值
+  public externalRenderers: __esri.externalRenderers;
   public view: __esri.SceneView;
   private _line: __esri.Polyline;
   private linesToRender: number[][][] = [];
@@ -56,7 +57,20 @@ class FlowLineRenderer {
 
   private tempMatrix4 = new Float32Array(16); // 临时4阶矩阵变量
 
-  constructor(view: __esri.SceneView, line: __esri.Polyline, config = {}) {
+  /**
+   *
+   * @param externalRenderers ArcGIS API提供的externalRenderers对象
+   * @param view 三维场景SceneView对象
+   * @param line ArcGIS API中Polyline类生成的示例对象
+   * @param config 线条流动效果相关配置
+   */
+  constructor(
+    externalRenderers: __esri.externalRenderers,
+    view: __esri.SceneView,
+    line: __esri.Polyline,
+    config = {}
+  ) {
+    this.externalRenderers = externalRenderers;
     this.view = view;
     this._line = line;
     this.time = new Date().getTime();
@@ -75,7 +89,7 @@ class FlowLineRenderer {
     this.initData(); // 更新线后初始化数据
   }
 
-  private updateConfig(config: any) {
+  private updateConfig(config: Config) {
     const { color, flowRatio, speed, density } = config;
     if (typeof color === 'string') {
       this.defaultColor = hexToRgb(color);
@@ -207,7 +221,7 @@ class FlowLineRenderer {
     // 矩阵相乘
     glMatrix.mat4.multiply(
       this.tempMatrix4,
-      context.camera.viewMatrix as any,
+      context.camera.viewMatrix as glMatrix.ReadonlyMat4,
       this.tempMatrix4
     );
     // 设置统一变量数据
@@ -226,7 +240,7 @@ class FlowLineRenderer {
     );
 
     // 一直绘制
-    externalRenderers.requestRender(this.view);
+    this.externalRenderers.requestRender(this.view);
 
     // cleanup
     context.resetWebGLState();
@@ -275,41 +289,42 @@ class FlowLineRenderer {
     const localOriginSR = this._line.spatialReference; // 局部原点空间参考
     const localOrigin = [center.x, center.y, 0]; // 局部原点坐标
     // 在渲染坐标中以32位精度计算局部原点
-    this.localOriginRender = (externalRenderers.toRenderCoordinates(
+    this.localOriginRender = (this.externalRenderers.toRenderCoordinates(
       this.view, // sceneView
       localOrigin, // 坐标
       0, // 开始读取坐标的索引
       localOriginSR, // 空间参考
-      new Float64Array(3) as any, // 对将写入结果的数组的引用
+      new Float32Array(3), // 对将写入结果的数组的引用
       0, // 将开始写入坐标的索引
       1 // 要变换的顶点数
     ) as [number, number, number]) || [0, 0, 0];
 
     const lineNum = this._line.paths.length;
-    const linesToRender: any = []; // 多条线转换后的坐标数组
+    const linesToRender: glMatrix.vec3[][] = []; // 多条线转换后的坐标数组
     for (let i = 0; i < lineNum; i++) {
       let line = this._line.paths[i];
-      const pointsToRender: any = []; // 每条线段中的点转换成渲染坐标
-      const lineToRender: any = []; // 每条线所有转换后的点坐标,包含插值点
+      const pointsToRender: glMatrix.vec3[] = []; // 每条线段中的点转换成渲染坐标
+      const lineToRender: glMatrix.vec3[] = []; // 每条线所有转换后的点坐标,包含插值点
       for (let j = 0; j < line.length; j++) {
         // 从输入坐标到渲染坐标的转换
         const point = line[j];
         // 生成变换矩阵,其中下标为12,13,14的元素分别为变换后点的[x, y, z]坐标值
-        const pointToRenderMat4 = externalRenderers.renderCoordinateTransformAt(
-          this.view,
-          point,
-          localOriginSR,
-          new Float64Array(16) as any
-        );
-        const pointToRender = [
+        const pointToRenderMat4 =
+          this.externalRenderers.renderCoordinateTransformAt(
+            this.view,
+            point,
+            localOriginSR,
+            new Float32Array(16)
+          );
+        const pointToRender = glMatrix.vec3.fromValues(
           pointToRenderMat4[12],
           pointToRenderMat4[13],
-          pointToRenderMat4[14],
-        ];
+          pointToRenderMat4[14]
+        );
         // 减去局部原点坐标
         glMatrix.vec3.subtract(
-          pointToRender as any,
-          pointToRender as any,
+          pointToRender,
+          pointToRender,
           this.localOriginRender
         );
 
@@ -318,19 +333,20 @@ class FlowLineRenderer {
           // 计算两个点之间的长度,向量计算
           const length = glMatrix.vec3.length(
             glMatrix.vec3.subtract(
-              new Float64Array(3) as any,
-              pointsToRender[j - 1] as any,
-              pointToRender as any
+              glMatrix.vec3.create(),
+              pointsToRender[j - 1],
+              pointToRender
             )
           );
           // 计算两个点之间需要插值的数量
           const interpolationNumber = length * this.defaultDensity - 2; //
           for (let k = 0; k < interpolationNumber; k++) {
-            const tempVec3 = new Float64Array(3);
+            const tempVec3 = glMatrix.vec3.create();
+            // 在两个 vec3 之间执行线性插值
             glMatrix.vec3.lerp(
-              tempVec3 as any,
-              pointsToRender[j - 1] as any,
-              pointToRender as any,
+              tempVec3,
+              pointsToRender[j - 1],
+              pointToRender,
               (k + 1) / (interpolationNumber + 1)
             );
             lineToRender.push(tempVec3);
@@ -352,7 +368,7 @@ class FlowLineRenderer {
     gl.uniformMatrix4fv(
       this.programUniformProjectionMatrix, // 要设置的统一变量的位置，通过 gl.getUniformLocation()方法获取位置
       false, // 是否转置矩阵，只能是false
-      camera.projectionMatrix as any // 要设置的矩阵值
+      camera.projectionMatrix as Float32List // 要设置的矩阵值
     );
   }
 
