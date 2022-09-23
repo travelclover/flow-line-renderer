@@ -32,43 +32,50 @@ const shaderStr = {
 };
 
 class FlowLineRenderer {
-  time: number; // 时间，用于动画
-  defaultColor = [0, 255, 255]; // 默认颜色
-  colorsArr: number[][] = []; // 线条颜色数组
-  defaultFlowRatio = 0.05; // 流动效果长度占流动路径长度的比例
-  flowRatioArr: number[] = []; //
-  defaultSpeed = 500; // 流动速度
-  speedArr: number[] = [];
-  defaultDensity = 3; // 点密度, 在地图层级放大的情况下，可能需要曾大该值
-  linesActiveIndex: number[] = []; // 每条线运动的索引值
-  view: __esri.SceneView;
-  line: __esri.Polyline;
-  linesToRender: number[][][] = [];
-  glPointSize = 3; // 点着色器中的点大小
-  localOriginRender: [number, number, number] = [0, 0, 0]; // 渲染坐标系中的原点坐标
-  program: WebGLProgram | null = null; // webgl程序
-  programAttributeVertexPosition: number = 0; // 顶点变量位置索引
-  programAttributeColor: number = 0; // 颜色索引
-  programUniformProjectionMatrix: WebGLUniformLocation | null = null; // 投影矩阵索引
-  programUniformModelViewMatrix: WebGLUniformLocation | null = null; // 模型视图矩阵索引
-  vboPositions: WebGLBuffer | null = null; // 顶点数据缓冲区
-  iboPositions: WebGLBuffer | null = null; // 顶点索引数据缓冲区
+  private time: number; // 时间，用于动画
+  private defaultColor = [0, 255, 255]; // 默认颜色
+  private colorsArr: number[][] = []; // 线条颜色数组
+  private defaultFlowRatio = 0.05; // 流动效果长度占流动路径长度的比例
+  private flowRatioArr: number[] = []; //
+  private defaultSpeed = 500; // 流动速度
+  private speedArr: number[] = [];
+  private defaultDensity = 3; // 点密度, 在地图层级放大的情况下，可能需要曾大该值
+  private linesActiveIndex: number[] = []; // 每条线运动的索引值
+  public view: __esri.SceneView;
+  private _line: __esri.Polyline;
+  private linesToRender: number[][][] = [];
+  private glPointSize = 3; // 点着色器中的点大小
+  private localOriginRender: [number, number, number] = [0, 0, 0]; // 渲染坐标系中的原点坐标
+  private program: WebGLProgram | null = null; // webgl程序
+  private programAttributeVertexPosition: number = 0; // 顶点变量位置索引
+  private programAttributeColor: number = 0; // 颜色索引
+  private programUniformProjectionMatrix: WebGLUniformLocation | null = null; // 投影矩阵索引
+  private programUniformModelViewMatrix: WebGLUniformLocation | null = null; // 模型视图矩阵索引
+  private vboPositions: WebGLBuffer | null = null; // 顶点数据缓冲区
+  private iboPositions: WebGLBuffer | null = null; // 顶点索引数据缓冲区
 
-  tempMatrix4 = new Float32Array(16); // 临时4阶矩阵变量
+  private tempMatrix4 = new Float32Array(16); // 临时4阶矩阵变量
 
   constructor(view: __esri.SceneView, line: __esri.Polyline, config = {}) {
     this.view = view;
-    this.line = line;
+    this._line = line;
     this.time = new Date().getTime();
     this.updateConfig(config);
   }
 
-  updateLine(line: __esri.Polyline) {
-    this.line = line;
+  get line() {
+    return this._line;
+  }
+  set line(line: __esri.Polyline) {
+    this.updateLine(line);
+  }
+
+  public updateLine(line: __esri.Polyline) {
+    this._line = line;
     this.initData(); // 更新线后初始化数据
   }
 
-  updateConfig(config: any) {
+  private updateConfig(config: any) {
     const { color, flowRatio, speed, density } = config;
     if (typeof color === 'string') {
       this.defaultColor = hexToRgb(color);
@@ -88,7 +95,11 @@ class FlowLineRenderer {
     this.defaultDensity = density || 3;
   }
 
-  setup(context: __esri.RenderContext) {
+  /**
+   * 通常在将外部渲染器添加到视图后或 SceneView 准备就绪时调用一次。如果就绪状态循环，则可能会再次调用它，例如当将不同的 Map 分配给视图时。
+   * @param context
+   */
+  private setup(context: __esri.RenderContext) {
     const gl = context.gl;
     this.initShaders(context); // 初始化着色器
     this.initData(); // 初始化数据
@@ -97,7 +108,11 @@ class FlowLineRenderer {
     context.resetWebGLState();
   }
 
-  render(context: __esri.RenderContext) {
+  /**
+   * 在每一帧中调用以执行状态更新和绘制调用。
+   * @param context
+   */
+  private render(context: __esri.RenderContext) {
     const gl = context.gl;
     const now = new Date().getTime();
     const timeDelta = now - this.time;
@@ -218,7 +233,7 @@ class FlowLineRenderer {
   }
 
   // 初始化着色器
-  initShaders(context: __esri.RenderContext) {
+  private initShaders(context: __esri.RenderContext) {
     const gl = context.gl;
     const fragmentShader = this.getShader(gl, 'fs'); // 获取片元着色器
     const vertexShader = this.getShader(gl, 'vs'); // 获取顶点着色器
@@ -254,10 +269,10 @@ class FlowLineRenderer {
   }
 
   // 初始化数据
-  initData() {
+  private initData() {
     // 设置一个局部原点
-    const center = this.line.extent?.center || { x: 0, y: 0 };
-    const localOriginSR = this.line.spatialReference; // 局部原点空间参考
+    const center = this._line.extent?.center || { x: 0, y: 0 };
+    const localOriginSR = this._line.spatialReference; // 局部原点空间参考
     const localOrigin = [center.x, center.y, 0]; // 局部原点坐标
     // 在渲染坐标中以32位精度计算局部原点
     this.localOriginRender = (externalRenderers.toRenderCoordinates(
@@ -270,10 +285,10 @@ class FlowLineRenderer {
       1 // 要变换的顶点数
     ) as [number, number, number]) || [0, 0, 0];
 
-    const lineNum = this.line.paths.length;
+    const lineNum = this._line.paths.length;
     const linesToRender: any = []; // 多条线转换后的坐标数组
     for (let i = 0; i < lineNum; i++) {
-      let line = this.line.paths[i];
+      let line = this._line.paths[i];
       const pointsToRender: any = []; // 每条线段中的点转换成渲染坐标
       const lineToRender: any = []; // 每条线所有转换后的点坐标,包含插值点
       for (let j = 0; j < line.length; j++) {
@@ -330,7 +345,7 @@ class FlowLineRenderer {
     this.linesToRender = linesToRender as number[][][];
   }
 
-  setCommonUniforms(context: __esri.RenderContext) {
+  private setCommonUniforms(context: __esri.RenderContext) {
     const gl = context.gl;
     const camera = context.camera;
 
@@ -341,8 +356,8 @@ class FlowLineRenderer {
     );
   }
 
-  // 从<script>中加载着色器
-  getShader(gl: WebGLRenderingContext, type: 'fs' | 'vs') {
+  // 获取着色器
+  private getShader(gl: WebGLRenderingContext, type: 'fs' | 'vs') {
     let str = shaderStr[type];
 
     let shader;
@@ -368,7 +383,7 @@ class FlowLineRenderer {
     return shader;
   }
 
-  linkProgram(
+  private linkProgram(
     gl: WebGLRenderingContext,
     fragmentShader: WebGLShader,
     vertexShader: WebGLShader
@@ -392,7 +407,7 @@ class FlowLineRenderer {
   }
 
   // 创建顶点缓冲区
-  createVertexBuffer(gl: WebGLRenderingContext, data: number[]) {
+  private createVertexBuffer(gl: WebGLRenderingContext, data: number[]) {
     const buffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     const float32Data = new Float32Array(data);
@@ -401,7 +416,7 @@ class FlowLineRenderer {
   }
 
   // 创建索引缓冲区
-  createIndexBuffer(gl: WebGLRenderingContext, data: BufferSource) {
+  private createIndexBuffer(gl: WebGLRenderingContext, data: BufferSource) {
     const buffer = gl.createBuffer(); // 创建并初始化一个缓冲区
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffer); // 将缓冲区绑定到用于元素索引的缓冲区
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, data, gl.STATIC_DRAW); // 初始化并创建缓冲区对象的数据存储
