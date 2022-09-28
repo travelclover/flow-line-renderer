@@ -50,9 +50,10 @@ const line = new Polyline({
 ```javascript
 {
   color: '#00ffff', // 线条颜色
+  density: 3,
   flowRatio: 0.1,
   speed: 1000,
-  density: 3,
+  width: 3,
 }
 ```
 
@@ -70,11 +71,18 @@ const renderer = new FlowLineRenderer(
 | 属性 | 类型 | 描述 | 
 | :---- | :---- | :---- | 
 | color | string \| string[] | 十六进制表示的颜色值。类型为数组时，按顺序一一对应`Polyline`中每条路径的颜色值。 | 
+| density | number | 点密度，在地图缩放层级较大的情况下，该值越大，越呈现出一条连续的线。默认值为3. | 
 | flowRatio | number \| number[] | 流动效果长度占流动路径长度的比例，取值范围大于0并且小于1。类型为数组时，按顺序一一对应`Polyline`中每条路径的流动长度比例。 | 
 | speed | number \| number[] | 流动速度，默认值为500。类型为数组时，按顺序一一对应`Polyline`中每条路径的流动速度。 | 
-| density | number | 点密度，在地图缩放层级较大的情况下，该值越大，越呈现出一条连续的线。 | 
+| width | number \| number[] | 线条宽度。默认值为3。 | 
 
 ## 实例方法
 | 方法名称 | 返回值类型 | 描述   | 
 | :---- | :---- | :---- | 
-| updateLine() | undefind | 更新几何线段，重新设置线条路径。 |
+| updateLine(line: __esri.Polyline) | undefind | 更新几何线段，重新设置线条路径。 |
+
+### updateLine()
+```javascript
+const line2 = new Polyline(lineOptions);
+renderer.updateLine(line2);
+```

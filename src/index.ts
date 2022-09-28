@@ -20,11 +20,12 @@ const shaderStr = {
   vs: `
     attribute vec3 aVertexPosition;
     attribute vec4 aColor;
+    attribute float aPointSize;
     uniform mat4 uProjectionMatrix;
     uniform mat4 uModelViewMatrix;
     varying vec4 vFragColor;
     void main(void) {
-      gl_PointSize = 3.0;
+      gl_PointSize = aPointSize;
       gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aVertexPosition, 1.0);
       vFragColor = aColor;
     }
@@ -40,6 +41,8 @@ class FlowLineRenderer {
   private defaultSpeed = 500; // 流动速度
   private speedArr: number[] = [];
   private defaultDensity = 3; // 点密度, 在地图层级放大的情况下，可能需要曾大该值
+  private defaultWidth = 3; // 线的默认宽度
+  private widthArr: number[] = []; // 线条宽度数组
   private linesActiveIndex: number[] = []; // 每条线运动的索引值
   public externalRenderers: __esri.externalRenderers;
   public view: __esri.SceneView;
@@ -50,6 +53,7 @@ class FlowLineRenderer {
   private program: WebGLProgram | null = null; // webgl程序
   private programAttributeVertexPosition: number = 0; // 顶点变量位置索引
   private programAttributeColor: number = 0; // 颜色索引
+  private programAttributePointSize: number = 0; // 颜色索引
   private programUniformProjectionMatrix: WebGLUniformLocation | null = null; // 投影矩阵索引
   private programUniformModelViewMatrix: WebGLUniformLocation | null = null; // 模型视图矩阵索引
   private vboPositions: WebGLBuffer | null = null; // 顶点数据缓冲区
@@ -90,7 +94,7 @@ class FlowLineRenderer {
   }
 
   private updateConfig(config: Config) {
-    const { color, flowRatio, speed, density } = config;
+    const { color, flowRatio, speed, density, width } = config;
     if (typeof color === 'string') {
       this.defaultColor = hexToRgb(color);
     } else if (Array.isArray(color)) {
@@ -105,6 +109,11 @@ class FlowLineRenderer {
       this.defaultSpeed = speed || 500;
     } else if (Array.isArray(speed)) {
       this.speedArr = speed;
+    }
+    if (!width || typeof width === 'number') {
+      this.defaultWidth = width || 3;
+    } else if (Array.isArray(width)) {
+      this.widthArr = width;
     }
     this.defaultDensity = density || 3;
   }
@@ -147,6 +156,7 @@ class FlowLineRenderer {
       const line = this.linesToRender[i];
       let flowRatio = this.flowRatioArr[i] || this.defaultFlowRatio;
       let speed = this.speedArr[i] || this.defaultSpeed;
+      let lineWidth = this.widthArr[i] || this.defaultWidth; // 线宽度
       // 计算需要显示的点数量
       let highlightNum = line.length * flowRatio;
       if (highlightNum < 2) highlightNum = 2;
@@ -178,13 +188,15 @@ class FlowLineRenderer {
         bufferArray.push(color[1] / 255);
         bufferArray.push(color[2] / 255);
         bufferArray.push(colorAlpha);
+        bufferArray.push(lineWidth);
       }
     }
+    const vertexDataNum = 8; // 每个顶点的数据量个数
     this.vboPositions = this.createVertexBuffer(gl, bufferArray);
     this.iboPositions = this.createIndexBuffer(
       gl,
       new Uint16Array(
-        new Array(bufferArray.length / 7).fill(1).map((n, i) => i)
+        new Array(bufferArray.length / vertexDataNum).fill(1).map((n, i) => i)
       )
     );
 
@@ -195,7 +207,7 @@ class FlowLineRenderer {
       3,
       gl.FLOAT,
       false,
-      7 * 4,
+      vertexDataNum * 4,
       0
     );
 
@@ -205,8 +217,18 @@ class FlowLineRenderer {
       4,
       gl.FLOAT,
       false,
-      7 * 4,
+      vertexDataNum * 4,
       3 * 4
+    );
+
+    gl.enableVertexAttribArray(this.programAttributePointSize);
+    gl.vertexAttribPointer(
+      this.programAttributePointSize,
+      1,
+      gl.FLOAT,
+      false,
+      vertexDataNum * 4,
+      7 * 4
     );
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.iboPositions);
@@ -234,7 +256,7 @@ class FlowLineRenderer {
     gl.drawElements(
       // gl.TRIANGLES, // 指定要渲染的类型
       gl.POINTS, // 指定要渲染的类型
-      bufferArray.length / 7, // 指定要渲染的绑定元素数组缓冲区的元素数
+      bufferArray.length / vertexDataNum, // 指定要渲染的绑定元素数组缓冲区的元素数
       gl.UNSIGNED_SHORT, // 指定元素数组缓冲区中的值的类型
       0 // 指定元素数组缓冲区中的字节偏移量。必须是给定类型大小的有效倍数
     );
@@ -258,28 +280,32 @@ class FlowLineRenderer {
     ); // 链接给定的WebGLProgram，从而完成为程序的片元和顶点着色器准备 GPU 代码的过程
     gl.useProgram(this.program); // 将定义好的WebGLProgram 对象添加到当前的渲染状态中
 
-    this.programAttributeVertexPosition = gl.getAttribLocation(
-      this.program as WebGLProgram,
-      'aVertexPosition'
-    );
-    gl.enableVertexAttribArray(this.programAttributeVertexPosition); // 通过传入索引来激活顶点属性
-    // 颜色
-    this.programAttributeColor = gl.getAttribLocation(
-      this.program as WebGLProgram,
-      'aColor'
-    );
+    if (this.program) {
+      this.programAttributeVertexPosition = gl.getAttribLocation(
+        this.program,
+        'aVertexPosition'
+      );
+      gl.enableVertexAttribArray(this.programAttributeVertexPosition); // 通过传入索引来激活顶点属性
+      // 颜色
+      this.programAttributeColor = gl.getAttribLocation(this.program, 'aColor');
+      // 点大小
+      this.programAttributePointSize = gl.getAttribLocation(
+        this.program,
+        'aPointSize'
+      );
 
-    // 通过统一变量的名称获取变量的位置
-    // 投影矩阵
-    this.programUniformProjectionMatrix = gl.getUniformLocation(
-      this.program as WebGLProgram,
-      'uProjectionMatrix'
-    );
-    // 模型视图矩阵
-    this.programUniformModelViewMatrix = gl.getUniformLocation(
-      this.program as WebGLProgram,
-      'uModelViewMatrix'
-    );
+      // 通过统一变量的名称获取变量的位置
+      // 投影矩阵
+      this.programUniformProjectionMatrix = gl.getUniformLocation(
+        this.program as WebGLProgram,
+        'uProjectionMatrix'
+      );
+      // 模型视图矩阵
+      this.programUniformModelViewMatrix = gl.getUniformLocation(
+        this.program as WebGLProgram,
+        'uModelViewMatrix'
+      );
+    }
   }
 
   // 初始化数据

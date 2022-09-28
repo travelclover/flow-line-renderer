@@ -12,6 +12,8 @@ export interface Config {
   speed?: number | number[];
   /** 点密度，在地图缩放层级较大的情况下，该值越大，越呈现出一条连续的线 */
   density?: number;
+  /** 线的宽度 */
+  width?: number | number[];
 }
 
 export default class FlowLineRenderer {
