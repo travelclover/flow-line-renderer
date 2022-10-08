@@ -1,6 +1,8 @@
 # flow-line-renderer
 A external renderer for ArcGIS JS API， used to show the flow effect of lines.
 
+![流线效果图](https://travelclover.github.io/img/2022/10/路径流线效果.gif)
+
 ## 安装
 使用npm：
 ```
