@@ -1,6 +1,6 @@
 {
   "name": "flow-line-renderer",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A external renderer for ArcGIS JS API, used to show the flow effect of lines.",
   "keywords": [
     "renderer",

@@ -53,7 +53,7 @@ class FlowLineRenderer {
   private program: WebGLProgram | null = null; // webgl程序
   private programAttributeVertexPosition: number = 0; // 顶点变量位置索引
   private programAttributeColor: number = 0; // 颜色索引
-  private programAttributePointSize: number = 0; // 颜色索引
+  private programAttributePointSize: number = 0; // 点大小索引
   private programUniformProjectionMatrix: WebGLUniformLocation | null = null; // 投影矩阵索引
   private programUniformModelViewMatrix: WebGLUniformLocation | null = null; // 模型视图矩阵索引
   private vboPositions: WebGLBuffer | null = null; // 顶点数据缓冲区
@@ -195,7 +195,7 @@ class FlowLineRenderer {
     this.vboPositions = this.createVertexBuffer(gl, bufferArray);
     this.iboPositions = this.createIndexBuffer(
       gl,
-      new Uint16Array(
+      new Uint32Array(
         new Array(bufferArray.length / vertexDataNum).fill(1).map((n, i) => i)
       )
     );
